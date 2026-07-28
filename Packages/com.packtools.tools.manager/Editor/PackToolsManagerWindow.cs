@@ -42,6 +42,13 @@ namespace PackTools.Manager
                 Description = "图片多语言切换、Inspector 可视化配置、预览数据导出、Luna ZIP 自动注入",
                 RepoPath = "/Packages/com.packtools.tools.localization"
             },
+            new ToolDefinition
+            {
+                PackageName = "com.packtools.tools.manager",
+                DisplayName = "PackTools 管理器",
+                Description = "管理所有已安装的 PackTools 工具，提供统一入口、安装/更新/卸载、新版本提示",
+                RepoPath = "/Packages/com.packtools.tools.manager"
+            },
             // 新增工具在此添加，例如：
             // new ToolDefinition
             // {
@@ -103,8 +110,7 @@ namespace PackTools.Manager
                 _installedTools.Clear();
                 foreach (PackageInfo pkg in request.Result)
                 {
-                    if (pkg.name.StartsWith(PackagePrefix, System.StringComparison.Ordinal)
-                        && pkg.name != "com.packtools.tools.manager")
+                    if (pkg.name.StartsWith(PackagePrefix, System.StringComparison.Ordinal))
                     {
                         _installedTools.Add(pkg);
                     }
@@ -640,10 +646,17 @@ namespace PackTools.Manager
             return null;
         }
 
-        private static void OpenToolMenu(PackageInfo pkg)
+        private void OpenToolMenu(PackageInfo pkg)
         {
             switch (pkg.name)
             {
+                case "com.packtools.tools.manager":
+                    // 管理器自身：聚焦本窗口
+                    var window = GetWindow<PackToolsManagerWindow>();
+                    window.Show();
+                    window.Focus();
+                    break;
+
                 case "com.packtools.tools.localization":
                     var switcherType = FindType("PackTools.LanguagLocalization.LanguageSwitcher");
                     if (switcherType != null)
