@@ -1,6 +1,6 @@
 {
   "name": "com.packtools.tools.localization",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "本地化多语言配置工具",
   "description": "图片多语言切换、Inspector 可视化配置、预览数据导出、ZIP 自动注入",
   "unity": "2022.3",
