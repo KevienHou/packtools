@@ -1,0 +1,19 @@
+{
+    "name": "PackTools.Localization.Editor",
+    "rootNamespace": "PackTools.LanguagLocalization",
+    "references": [
+        "PackTools.Localization.Runtime",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

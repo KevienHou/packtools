@@ -1,0 +1,33 @@
+# Unity 项目文件（开发环境用，不包含在包中）
+/Assets/
+/Library/
+/Temp/
+/Logs/
+/obj/
+/Bin/
+/UserSettings/
+/ProjectSettings/
+/Packages/manifest.json
+/Packages/packages-lock.json
+
+# 注意：Packages/com.packtools.tools/ 是包源码，需要纳入版本控制
+
+# IDE / 编辑器
+/.vscode/
+*.csproj
+*.sln
+
+# Codely CLI
+/.codely-cli/
+/.codely.packages/
+
+# 临时文件
+/LunaTemp/
+/mem-log/
+/screenshots/
+*.tmp
+*.bak
+
+# 系统文件
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+  "name": "com.packtools.tools.manager",
+  "version": "1.0.0",
+  "displayName": "PackTools 管理器",
+  "description": "管理所有已安装的 PackTools 工具，提供统一入口界面。列出已安装工具的名称、版本、描述，并可直接跳转打开。",
+  "unity": "2022.3",
+  "author": {
+    "name": "PackTools",
+    "url": "https://github.com/KevienHou/Packtools"
+  },
+  "dependencies": {}
+}

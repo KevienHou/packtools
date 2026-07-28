@@ -1,0 +1,14 @@
+{
+    "name": "PackTools.Localization.Runtime",
+    "rootNamespace": "PackTools.LanguagLocalization",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

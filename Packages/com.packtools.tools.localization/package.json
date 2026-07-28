@@ -1,0 +1,14 @@
+{
+  "name": "com.packtools.tools.localization",
+  "version": "1.0.0",
+  "displayName": "多语言本地化 (PackTools)",
+  "description": "图片多语言切换、Inspector 可视化配置、预览数据导出、Luna ZIP 自动注入",
+  "unity": "2022.3",
+  "author": {
+    "name": "PackTools",
+    "url": "https://github.com/KevienHou/Packtools"
+  },
+  "dependencies": {
+    "com.unity.ugui": "1.0.0"
+  }
+}
