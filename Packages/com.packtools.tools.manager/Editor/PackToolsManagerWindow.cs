@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Networking;
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 using StatusCode = UnityEditor.PackageManager.StatusCode;
 using Client = UnityEditor.PackageManager.Client;
@@ -20,7 +21,7 @@ namespace PackTools.Manager
 
     /// <summary>
     /// PackTools 管理器窗口。
-    /// 安装、更新、卸载 PackTools 工具，并提供快捷入口。
+    /// 安装、更新、卸载 PackTools 工具，并提示新版本。
     /// </summary>
     public sealed class PackToolsManagerWindow : EditorWindow
     {
@@ -28,8 +29,8 @@ namespace PackTools.Manager
         private const string PackagePrefix = "com.packtools.tools.";
         private const float WindowMinWidth = 480f;
         private const float WindowMinHeight = 360f;
-        private const string DefaultGitURL = "https://github.com/KevienHou/Packtools.git";
-        private const string GitURLPrefKey = "PackTools.GitURL";
+        private const string GitURL = "https://github.com/KevienHou/packtools.git";
+        private const string RawBaseURL = "https://raw.githubusercontent.com/KevienHou/packtools/main";
 
         // ── 已知工具注册表（新增工具时在此添加）──
         private static readonly ToolDefinition[] KnownTools =
@@ -52,11 +53,12 @@ namespace PackTools.Manager
         };
 
         private List<PackageInfo> _installedTools;
+        private Dictionary<string, string> _latestVersions; // packageName -> latest version
         private Vector2 _scrollPosition;
         private bool _loading;
         private bool _busy;
         private string _busyMessage;
-        private string _gitURL;
+        private bool _checkingVersions;
 
         [MenuItem(MenuPath)]
         private static void Open()
@@ -68,7 +70,7 @@ namespace PackTools.Manager
 
         private void OnEnable()
         {
-            _gitURL = EditorPrefs.GetString(GitURLPrefKey, DefaultGitURL);
+            _latestVersions = new Dictionary<string, string>();
             RefreshPackages();
         }
 
@@ -109,14 +111,149 @@ namespace PackTools.Manager
                 }
 
                 Repaint();
+
+                // 加载完本地包后，检查远程版本
+                CheckRemoteVersions();
             }
+        }
+
+        // ── 远程版本检查 ──
+
+        private void CheckRemoteVersions()
+        {
+            _checkingVersions = true;
+            _latestVersions.Clear();
+
+            int pendingRequests = 0;
+
+            for (int i = 0; i < KnownTools.Length; i++)
+            {
+                ToolDefinition tool = KnownTools[i];
+                string rawURL = $"{RawBaseURL}{tool.RepoPath}/package.json";
+
+                pendingRequests++;
+                FetchRemoteVersion(tool.PackageName, rawURL);
+            }
+
+            // 如果没有已知工具，直接结束
+            if (pendingRequests == 0)
+            {
+                _checkingVersions = false;
+            }
+        }
+
+        private void FetchRemoteVersion(string packageName, string url)
+        {
+            var webRequest = UnityWebRequest.Get(url);
+            webRequest.timeout = 10;
+            var op = webRequest.SendWebRequest();
+
+            EditorApplication.update += OnWebComplete;
+
+            void OnWebComplete()
+            {
+                if (!op.isDone)
+                {
+                    return;
+                }
+
+                EditorApplication.update -= OnWebComplete;
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    string version = ExtractVersionFromJson(webRequest.downloadHandler.text);
+                    if (!string.IsNullOrEmpty(version))
+                    {
+                        _latestVersions[packageName] = version;
+                    }
+                }
+
+                // 检查是否所有请求都完成了
+                CheckAllRequestsDone();
+            }
+        }
+
+        private int _pendingVersionChecks;
+
+        private void CheckAllRequestsDone()
+        {
+            // 简单方式：每完成一个请求，检查是否还有未完成的
+            // 由于每个请求独立注册了 EditorApplication.update，
+            // 我们用一个简单计数器判断
+            _pendingVersionChecks++;
+            if (_pendingVersionChecks >= KnownTools.Length)
+            {
+                _checkingVersions = false;
+                _pendingVersionChecks = 0;
+                Repaint();
+            }
+        }
+
+        private static string ExtractVersionFromJson(string json)
+        {
+            const string key = "\"version\"";
+            int keyIndex = json.IndexOf(key, System.StringComparison.OrdinalIgnoreCase);
+            if (keyIndex < 0)
+            {
+                return null;
+            }
+
+            int colonIndex = json.IndexOf(':', keyIndex + key.Length);
+            if (colonIndex < 0)
+            {
+                return null;
+            }
+
+            int startQuote = json.IndexOf('"', colonIndex + 1);
+            if (startQuote < 0)
+            {
+                return null;
+            }
+
+            int endQuote = json.IndexOf('"', startQuote + 1);
+            if (endQuote < 0)
+            {
+                return null;
+            }
+
+            return json.Substring(startQuote + 1, endQuote - startQuote - 1);
+        }
+
+        // ── 版本比较 ──
+
+        private static bool IsNewerVersion(string remote, string local)
+        {
+            if (string.IsNullOrEmpty(remote) || string.IsNullOrEmpty(local))
+            {
+                return false;
+            }
+
+            if (!System.Version.TryParse(remote, out var remoteVer))
+            {
+                return false;
+            }
+            if (!System.Version.TryParse(local, out var localVer))
+            {
+                return false;
+            }
+
+            return remoteVer > localVer;
+        }
+
+        private bool HasNewVersion(string packageName, string installedVersion)
+        {
+            if (!_latestVersions.TryGetValue(packageName, out string latest))
+            {
+                return false;
+            }
+            return IsNewerVersion(latest, installedVersion);
         }
 
         // ── 安装 / 更新 / 卸载 ──
 
         private void InstallTool(ToolDefinition tool)
         {
-            string url = $"{_gitURL}?path={tool.RepoPath}";
+            string url = $"{GitURL}?path={tool.RepoPath}";
             _busy = true;
             _busyMessage = $"正在安装 {tool.DisplayName}...";
             var request = Client.Add(url);
@@ -152,7 +289,6 @@ namespace PackTools.Manager
 
         private void UpdateTool(PackageInfo pkg, ToolDefinition tool)
         {
-            // git 包更新：先移除再重新安装，强制 Unity 重新拉取最新版本
             _busy = true;
             _busyMessage = $"正在更新 {pkg.displayName}...";
             var removeRequest = Client.Remove(pkg.name);
@@ -175,8 +311,7 @@ namespace PackTools.Manager
                     return;
                 }
 
-                // 重新安装
-                string url = $"{_gitURL}?path={tool.RepoPath}";
+                string url = $"{GitURL}?path={tool.RepoPath}";
                 var addRequest = Client.Add(url);
                 EditorApplication.update += OnReAddComplete;
 
@@ -265,7 +400,6 @@ namespace PackTools.Manager
         private void OnGUI()
         {
             DrawHeader();
-            DrawGitURLField();
 
             EditorGUILayout.Space(4);
 
@@ -298,24 +432,16 @@ namespace PackTools.Manager
             EditorGUILayout.LabelField("PackTools 管理器", EditorStyles.boldLabel);
             GUILayout.FlexibleSpace();
 
+            if (_checkingVersions)
+            {
+                GUILayout.Label("检查版本中...", EditorStyles.miniLabel, GUILayout.Width(70));
+            }
+
             if (GUILayout.Button("刷新", EditorStyles.toolbarButton))
             {
                 RefreshPackages();
             }
 
-            EditorGUILayout.EndHorizontal();
-        }
-
-        private void DrawGitURLField()
-        {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("仓库地址", GUILayout.Width(60));
-            string newURL = EditorGUILayout.TextField(_gitURL);
-            if (newURL != _gitURL)
-            {
-                _gitURL = newURL;
-                EditorPrefs.SetString(GitURLPrefKey, _gitURL);
-            }
             EditorGUILayout.EndHorizontal();
         }
 
@@ -345,11 +471,24 @@ namespace PackTools.Manager
         private void DrawInstalledToolEntry(PackageInfo pkg)
         {
             ToolDefinition toolDef = FindToolDefinition(pkg.name);
+            bool hasUpdate = HasNewVersion(pkg.name, pkg.version);
+            string latestVer = _latestVersions.TryGetValue(pkg.name, out var lv) ? lv : null;
 
             EditorGUILayout.BeginHorizontal("box", GUILayout.Height(56));
 
             EditorGUILayout.BeginVertical();
+
+            // 名称行：如果有新版本，名称后加绿色提示
+            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField(pkg.displayName, EditorStyles.boldLabel);
+            if (hasUpdate)
+            {
+                var greenLabel = new GUIStyle(EditorStyles.boldLabel);
+                greenLabel.normal.textColor = new Color(0.2f, 0.7f, 0.2f);
+                GUILayout.Label($"  有新版本 v{latestVer}", greenLabel);
+            }
+            EditorGUILayout.EndHorizontal();
+
             if (!string.IsNullOrWhiteSpace(pkg.description))
             {
                 EditorGUILayout.LabelField(
@@ -357,6 +496,8 @@ namespace PackTools.Manager
                     EditorStyles.wordWrappedMiniLabel
                 );
             }
+
+            // 版本行：显示当前版本 + 来源
             EditorGUILayout.LabelField(
                 $"v{pkg.version}  ·  {pkg.source}",
                 EditorStyles.miniLabel
@@ -370,9 +511,23 @@ namespace PackTools.Manager
 
             using (new EditorGUI.DisabledScope(toolDef == null))
             {
-                if (GUILayout.Button("更新", GUILayout.Width(50), GUILayout.Height(24)))
+                // 有新版本时更新按钮高亮
+                if (hasUpdate)
                 {
-                    UpdateTool(pkg, toolDef);
+                    var greenBtn = new GUIStyle(GUI.skin.button);
+                    greenBtn.normal.textColor = new Color(0.2f, 0.7f, 0.2f);
+                    greenBtn.fontStyle = FontStyle.Bold;
+                    if (GUILayout.Button("更新", greenBtn, GUILayout.Width(50), GUILayout.Height(24)))
+                    {
+                        UpdateTool(pkg, toolDef);
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("更新", GUILayout.Width(50), GUILayout.Height(24)))
+                    {
+                        UpdateTool(pkg, toolDef);
+                    }
                 }
             }
 
@@ -426,6 +581,9 @@ namespace PackTools.Manager
 
         private void DrawAvailableToolEntry(ToolDefinition tool)
         {
+            // 获取远程版本
+            string remoteVer = _latestVersions.TryGetValue(tool.PackageName, out var rv) ? rv : null;
+
             EditorGUILayout.BeginHorizontal("box", GUILayout.Height(56));
 
             EditorGUILayout.BeginVertical();
@@ -434,7 +592,15 @@ namespace PackTools.Manager
                 tool.Description,
                 EditorStyles.wordWrappedMiniLabel
             );
-            EditorGUILayout.LabelField(tool.PackageName, EditorStyles.miniLabel);
+
+            if (!string.IsNullOrEmpty(remoteVer))
+            {
+                EditorGUILayout.LabelField($"v{remoteVer}  ·  {tool.PackageName}", EditorStyles.miniLabel);
+            }
+            else
+            {
+                EditorGUILayout.LabelField(tool.PackageName, EditorStyles.miniLabel);
+            }
             EditorGUILayout.EndVertical();
 
             GUILayout.FlexibleSpace();
